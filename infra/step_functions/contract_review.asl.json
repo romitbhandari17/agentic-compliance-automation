@@ -1,0 +1,106 @@
+{
+  "Comment": "Orchestrate ingestion -> log result -> compliance with retry and error handling",
+  "StartAt": "InvokeIngestion",
+  "States": {
+    "InvokeIngestion": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ingestion_lambda_arn}",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.ingestionResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 1
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.ingestionError",
+          "Next": "HandleIngestionError"
+        }
+      ],
+      "Next": "LogIngestionResult"
+    },
+
+    "LogIngestionResult": {
+      "Type": "Pass",
+      "ResultPath": "$.log",
+      "Result": {
+        "message": "Ingestion completed",
+        "ingestionResponse.$": "$.ingestionResult"
+      },
+      "Next": "InvokeCompliance"
+    },
+
+    "HandleIngestionError": {
+      "Type": "Pass",
+      "Result": {
+        "status": "INGESTION_FAILED",
+        "detail.$": "$.ingestionError"
+      },
+      "ResultPath": "$.errorInfo",
+      "Next": "FailWorkflow"
+    },
+
+    "InvokeCompliance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${compliance_lambda_arn}",
+        "Payload.$": "$"
+      },
+      "ResultPath": "$.complianceResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.complianceError",
+          "Next": "HandleComplianceError"
+        }
+      ],
+      "End": true
+    },
+
+    "HandleComplianceError": {
+      "Type": "Pass",
+      "Result": {
+        "status": "COMPLIANCE_FAILED",
+        "detail.$": "$.complianceError"
+      },
+      "ResultPath": "$.errorInfo",
+      "Next": "FailWorkflow"
+    },
+
+    "FailWorkflow": {
+      "Type": "Fail",
+      "Error": "WorkflowFailed",
+      "Cause": "See $.errorInfo for details"
+    }
+  }
+}
