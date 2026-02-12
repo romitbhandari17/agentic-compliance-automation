@@ -38,3 +38,9 @@ variable "compliance_zip_s3_key" {
   type        = string
   default     = ""
 }
+
+variable "invoke_zip_path" {
+  description = "Path to invoke_sfn lambda zip package"
+  type        = string
+  default     = ""
+}

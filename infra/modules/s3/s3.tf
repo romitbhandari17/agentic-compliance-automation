@@ -12,3 +12,6 @@ resource "aws_s3_bucket_versioning" "this" {
     status = "Enabled"
   }
 }
+
+# Note: bucket notifications and lambda permissions are declared at the root infra level
+# to avoid module circular dependencies.

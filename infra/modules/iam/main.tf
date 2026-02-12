@@ -179,6 +179,39 @@ resource "aws_iam_role_policy" "step_functions_inline" {
   policy = data.aws_iam_policy_document.step_functions_policy.json
 }
 
+// Invoke Step Functions Lambda execution role
+resource "aws_iam_role" "invoke_sfn_lambda_role" {
+  name               = "invoke-sfn-lambda-execution-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+// Inline policy for invoke_sfn lambda: allow StartExecution on Step Functions and logging
+data "aws_iam_policy_document" "invoke_sfn_lambda_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "states:StartExecution"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "invoke_sfn_lambda_inline" {
+  name   = "invoke-sfn-lambda-inline-policy"
+  role   = aws_iam_role.invoke_sfn_lambda_role.id
+  policy = data.aws_iam_policy_document.invoke_sfn_lambda_policy.json
+}
+
 // Notes:
 // - Actions and resources use wildcards now as placeholders; replace with least-privilege ARNs/actions later.
 // - This file only contains IAM/Lambda-related role and inline policy changes as requested.

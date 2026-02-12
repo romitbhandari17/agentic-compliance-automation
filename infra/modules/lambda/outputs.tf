@@ -20,3 +20,12 @@ output "compliance_lambda_name" {
   value       = aws_lambda_function.compliance.function_name
 }
 
+output "invoke_sfn_lambda_arn" {
+  description = "ARN of the invoke_sfn Lambda function"
+  value       = aws_lambda_function.invoke_sfn.arn
+}
+
+output "invoke_sfn_lambda_name" {
+  description = "Name of the invoke_sfn Lambda function"
+  value       = aws_lambda_function.invoke_sfn.function_name
+}

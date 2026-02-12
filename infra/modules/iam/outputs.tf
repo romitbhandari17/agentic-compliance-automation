@@ -28,3 +28,13 @@ output "step_functions_role_name" {
   description = "Name of the Step Functions execution role"
   value       = aws_iam_role.step_functions_role.name
 }
+
+output "invoke_sfn_lambda_role_arn" {
+  description = "ARN of the invoke-sfn Lambda execution role"
+  value       = aws_iam_role.invoke_sfn_lambda_role.arn
+}
+
+output "invoke_sfn_lambda_role_name" {
+  description = "Name of the invoke-sfn Lambda execution role"
+  value       = aws_iam_role.invoke_sfn_lambda_role.name
+}

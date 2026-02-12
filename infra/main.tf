@@ -16,14 +16,17 @@ module "lambda" {
   s3_bucket                 = module.s3.bucket_id
   ingestion_filename          = var.ingestion_zip_path
   compliance_filename        = var.compliance_zip_path
+  invoke_filename           = var.invoke_zip_path
   # ingestion_s3_key           = var.ingestion_zip_s3_key
   # compliance_s3_key          = var.compliance_zip_s3_key
 
   ingestion_function_name   = "${var.project}-${var.env}-ingestion-lambda"
   compliance_function_name  = "${var.project}-${var.env}-compliance-lambda"
+  invoke_function_name      = "${var.project}-${var.env}-invoke-sfn-lambda"
 
   ingestion_role_arn        = module.iam.ingestion_lambda_role_arn
   compliance_role_arn       = module.iam.compliance_lambda_role_arn
+  invoke_role_arn           = module.iam.invoke_sfn_lambda_role_arn
 }
 
 // Module: Step Functions (orchestrates invocation of lambdas)
@@ -43,38 +46,22 @@ module "step_functions" {
 
 }
 
-// Root outputs to expose convenient attributes
-output "ingestion_lambda_arn" {
-  description = "ARN of the ingestion Lambda created by the lambda module"
-  value       = module.lambda.ingestion_lambda_arn
+// Allow S3 to invoke the invoke_sfn lambda
+resource "aws_lambda_permission" "allow_s3_invoke" {
+  statement_id  = "AllowExecutionFromS3"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda.invoke_sfn_lambda_arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.s3.bucket_arn
 }
 
-output "ingestion_lambda_name" {
-  description = "Name of the ingestion Lambda created by the lambda module"
-  value       = module.lambda.ingestion_lambda_name
-}
+resource "aws_s3_bucket_notification" "artifacts_notification" {
+  bucket = module.s3.bucket_id
 
-output "compliance_lambda_arn" {
-  description = "ARN of the compliance Lambda created by the lambda module"
-  value       = module.lambda.compliance_lambda_arn
-}
+  lambda_function {
+    lambda_function_arn = module.lambda.invoke_sfn_lambda_arn
+    events              = ["s3:ObjectCreated:Put"]
+  }
 
-output "compliance_lambda_name" {
-  description = "Name of the compliance Lambda created by the lambda module"
-  value       = module.lambda.compliance_lambda_name
-}
-
-output "ingestion_role_arn" {
-  description = "ARN of the ingestion Lambda execution role"
-  value       = module.iam.ingestion_lambda_role_arn
-}
-
-output "compliance_role_arn" {
-  description = "ARN of the compliance Lambda execution role"
-  value       = module.iam.compliance_lambda_role_arn
-}
-
-output "step_functions_role_arn" {
-  description = "ARN of the Step Functions execution role"
-  value       = module.iam.step_functions_role_arn
+  depends_on = [aws_lambda_permission.allow_s3_invoke]
 }

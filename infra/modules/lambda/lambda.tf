@@ -33,3 +33,13 @@ resource "aws_lambda_function" "compliance" {
   role          = var.compliance_role_arn
   timeout       = var.compliance_timeout
 }
+
+resource "aws_lambda_function" "invoke_sfn" {
+  function_name = var.invoke_function_name
+  filename         = var.invoke_filename
+  source_code_hash = length(var.invoke_filename) > 0 ? filebase64sha256(var.invoke_filename) : null
+  handler       = "main.handler"
+  runtime       = "python3.10"
+  role          = var.invoke_role_arn
+  timeout       = var.invoke_timeout
+}

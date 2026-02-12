@@ -14,6 +14,9 @@ variable "ingestion_zip_path" {
 variable "compliance_zip_path" {
   default = ""
 }
+variable "invoke_zip_path" {
+  default = ""
+}
 
 module "root" {
   source = "../../"
@@ -24,4 +27,5 @@ module "root" {
   region                    = var.region
   ingestion_zip_path       = var.ingestion_zip_path
   compliance_zip_path       = var.compliance_zip_path
+  invoke_zip_path = var.invoke_zip_path
 }

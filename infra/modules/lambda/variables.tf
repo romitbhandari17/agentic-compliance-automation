@@ -62,3 +62,27 @@ variable "compliance_timeout" {
   type        = number
   default     = 300
 }
+
+variable "invoke_filename" {
+  description = "path for invoke_sfn lambda deployment package"
+  type        = string
+  default     = ""
+}
+
+variable "invoke_function_name" {
+  description = "Name for the invoke_sfn Lambda function"
+  type        = string
+  default     = "invoke-sfn-lambda"
+}
+
+variable "invoke_role_arn" {
+  description = "IAM role ARN to attach to the invoke_sfn Lambda"
+  type        = string
+  default     = ""
+}
+
+variable "invoke_timeout" {
+  description = "Timeout for invoke_sfn Lambda in seconds"
+  type        = number
+  default     = 300
+}
