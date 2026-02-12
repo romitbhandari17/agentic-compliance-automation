@@ -1,14 +1,28 @@
 {
   "Comment": "Orchestrate ingestion -> log result -> compliance with retry and error handling",
-  "StartAt": "InvokeIngestion",
+  "StartAt": "ValidateInput",
   "States": {
+    "ValidateInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "contract_id.$": "$.contract_id",
+        "s3.$": "$.s3",
+        "s3_uri.$": "$.s3_uri",
+        "__original_input.$": "$"
+      },
+      "ResultPath": "$.validatedInput",
+      "Next": "InvokeIngestion"
+    },
+
     "InvokeIngestion": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "${ingestion_lambda_arn}",
-        "Payload.$": "$"
+        "Payload.$": "$.validatedInput"
       },
+      "TimeoutSeconds": 300,
+      "HeartbeatSeconds": 60,
       "ResultPath": "$.ingestionResult",
       "Retry": [
         {
@@ -34,22 +48,39 @@
           "Next": "HandleIngestionError"
         }
       ],
-      "Next": "LogIngestionResult"
+      "Next": "CheckIngestionResult"
+    },
+
+    "CheckIngestionResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.ingestionResult.Payload.extracted_text",
+          "IsPresent": true,
+          "Next": "LogIngestionResult"
+        },
+        {
+          "Variable": "$.ingestionResult.Payload.contract_id",
+          "IsPresent": true,
+          "Next": "LogIngestionResult"
+        }
+      ],
+      "Default": "HandleIngestionError"
     },
 
     "LogIngestionResult": {
       "Type": "Pass",
-      "ResultPath": "$.log",
       "Result": {
         "message": "Ingestion completed",
-        "ingestionResponse.$": "$.ingestionResult"
+        "ingestionResponse.$": "$.ingestionResult.Payload"
       },
+      "ResultPath": "$.log",
       "Next": "InvokeCompliance"
     },
 
     "HandleIngestionError": {
       "Type": "Pass",
-      "Result": {
+      "Parameters": {
         "status": "INGESTION_FAILED",
         "detail.$": "$.ingestionError"
       },
@@ -62,8 +93,10 @@
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "${compliance_lambda_arn}",
-        "Payload.$": "$"
+        "Payload.$": "$.ingestionResult.Payload"
       },
+      "TimeoutSeconds": 300,
+      "HeartbeatSeconds": 60,
       "ResultPath": "$.complianceResult",
       "Retry": [
         {
@@ -75,6 +108,11 @@
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2.0
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 1
         }
       ],
       "Catch": [
@@ -84,12 +122,29 @@
           "Next": "HandleComplianceError"
         }
       ],
-      "End": true
+      "Next": "CheckComplianceResult"
+    },
+
+    "CheckComplianceResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.complianceResult.Payload.model_output_raw",
+          "IsPresent": true,
+          "Next": "SuccessState"
+        },
+        {
+          "Variable": "$.complianceResult.Payload.findings",
+          "IsPresent": true,
+          "Next": "SuccessState"
+        }
+      ],
+      "Default": "HandleComplianceError"
     },
 
     "HandleComplianceError": {
       "Type": "Pass",
-      "Result": {
+      "Parameters": {
         "status": "COMPLIANCE_FAILED",
         "detail.$": "$.complianceError"
       },
@@ -101,6 +156,10 @@
       "Type": "Fail",
       "Error": "WorkflowFailed",
       "Cause": "See $.errorInfo for details"
+    },
+
+    "SuccessState": {
+      "Type": "Succeed"
     }
   }
 }

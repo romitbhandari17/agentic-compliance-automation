@@ -49,3 +49,16 @@ variable "compliance_s3_key" {
   type        = string
   default     = ""
 }
+
+// New timeout variables (seconds)
+variable "ingestion_timeout" {
+  description = "Timeout for the ingestion Lambda function in seconds"
+  type        = number
+  default     = 300
+}
+
+variable "compliance_timeout" {
+  description = "Timeout for the compliance Lambda function in seconds"
+  type        = number
+  default     = 300
+}

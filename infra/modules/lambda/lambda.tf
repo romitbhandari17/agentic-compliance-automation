@@ -17,6 +17,7 @@ resource "aws_lambda_function" "ingestion" {
   handler       = "main.handler"
   runtime       = "python3.10"
   role          = var.ingestion_role_arn
+  timeout       = var.ingestion_timeout
 }
 
 resource "aws_lambda_function" "compliance" {
@@ -30,4 +31,5 @@ resource "aws_lambda_function" "compliance" {
   handler       = "main.handler"
   runtime       = "python3.10"
   role          = var.compliance_role_arn
+  timeout       = var.compliance_timeout
 }
