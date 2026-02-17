@@ -43,3 +43,15 @@ resource "aws_lambda_function" "invoke_sfn" {
   role          = var.invoke_role_arn
   timeout       = var.invoke_timeout
 }
+
+resource "aws_lambda_function" "risk_analysis" {
+  function_name = var.risk_analysis_function_name
+
+  filename         = length(var.risk_analysis_filename) > 0 ? var.risk_analysis_filename : null
+  source_code_hash = length(var.risk_analysis_filename) > 0 ? filebase64sha256(var.risk_analysis_filename) : null
+
+  handler       = "main.handler"
+  runtime       = "python3.10"
+  role          = var.risk_analysis_role_arn
+  timeout       = var.risk_analysis_timeout
+}

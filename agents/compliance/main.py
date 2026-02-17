@@ -105,7 +105,16 @@ def _build_bedrock_prompt(contract_id: str, s3_uri: str, extracted_text: str, fi
         f"Also include the heuristic findings (PII counts, financial indicators, GDPR keyword hits).\n\n"
         f"Heuristic findings: {json.dumps(findings)}\n\n"
         f"Contract text (truncated={truncated}):\n{text_sample}\n\n"
-        f"Return JSON object with keys: summary, severity, recommendations, details. Keep the JSON parsable."
+        f"Return JSON object with keys: summary, severity, recommendations, details. Keep the JSON parsable.\n"
+        f"In details, include an array named explainability with objects in this format:\n"
+        f"{{\n"
+        f"  \"clause\": \"Data Processing\",\n"
+        f"  \"framework\": \"GDPR|SOX\",\n"
+        f"  \"compliance_status\": \"Passed|Failed|NeedsReview\",\n"
+        f"  \"violated_requirement\": \"string\",\n"
+        f"  \"reasoning\": \"string\",\n"
+        f"  \"confidence\": <0.0-1.0>\n"
+        f"}}\n"
     )
 
     _log_and_print("_build_bedrock_prompt: prompt built")

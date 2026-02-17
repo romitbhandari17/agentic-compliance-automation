@@ -38,3 +38,13 @@ output "invoke_sfn_lambda_role_name" {
   description = "Name of the invoke-sfn Lambda execution role"
   value       = aws_iam_role.invoke_sfn_lambda_role.name
 }
+
+output "risk_analysis_lambda_role_arn" {
+  description = "ARN of the risk analysis Lambda execution role"
+  value       = aws_iam_role.risk_analysis_lambda_role.arn
+}
+
+output "risk_analysis_lambda_role_name" {
+  description = "Name of the risk analysis Lambda execution role"
+  value       = aws_iam_role.risk_analysis_lambda_role.name
+}

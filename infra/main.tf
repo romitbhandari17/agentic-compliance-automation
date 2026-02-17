@@ -9,24 +9,25 @@ module "s3" {
   name_prefix = "${var.project}-${var.env}"
 }
 
-// Module: Lambda (creates ingestion and compliance Lambda functions)
+// Module: Lambda (creates ingestion, compliance, invoke_sfn Lambda functions)
 module "lambda" {
   source = "./modules/lambda"
 
   s3_bucket                 = module.s3.bucket_id
-  ingestion_filename          = var.ingestion_zip_path
-  compliance_filename        = var.compliance_zip_path
-  invoke_filename           = var.invoke_zip_path
-  # ingestion_s3_key           = var.ingestion_zip_s3_key
-  # compliance_s3_key          = var.compliance_zip_s3_key
+  ingestion_filename        = var.ingestion_zip_path
+  compliance_filename       = var.compliance_zip_path
+  invoke_filename          = var.invoke_zip_path
+  risk_analysis_filename   = var.risk_analysis_zip_path
 
   ingestion_function_name   = "${var.project}-${var.env}-ingestion-lambda"
   compliance_function_name  = "${var.project}-${var.env}-compliance-lambda"
   invoke_function_name      = "${var.project}-${var.env}-invoke-sfn-lambda"
+  risk_analysis_function_name = "${var.project}-${var.env}-risk-analysis-lambda"
 
   ingestion_role_arn        = module.iam.ingestion_lambda_role_arn
   compliance_role_arn       = module.iam.compliance_lambda_role_arn
   invoke_role_arn           = module.iam.invoke_sfn_lambda_role_arn
+  risk_analysis_role_arn    = module.iam.risk_analysis_lambda_role_arn
 }
 
 // Module: Step Functions (orchestrates invocation of lambdas)

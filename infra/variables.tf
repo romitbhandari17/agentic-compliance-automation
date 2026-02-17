@@ -27,20 +27,14 @@ variable "compliance_zip_path" {
   default     = ""
 }
 
-variable "ingestion_zip_s3_key" {
-  description = "S3 key where ingestion lambda zip is stored (optional)"
-  type        = string
-  default     = ""
-}
-
-variable "compliance_zip_s3_key" {
-  description = "S3 key where compliance lambda zip is stored (optional)"
-  type        = string
-  default     = ""
-}
-
 variable "invoke_zip_path" {
   description = "Path to invoke_sfn lambda zip package"
+  type        = string
+  default     = ""
+}
+
+variable "risk_analysis_zip_path" {
+  description = "Path to risk_analysis lambda zip package"
   type        = string
   default     = ""
 }
