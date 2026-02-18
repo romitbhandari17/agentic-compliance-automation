@@ -26,7 +26,7 @@ def _extract_text_from_bytes_image(image_bytes: bytes) -> str:
     return "\n".join(lines)
 
 
-def _extract_text_from_s3_pdf(bucket: str, key: str, max_wait_seconds: int = 120, poll_interval: float = 2.0) -> str:
+def _extract_text_from_s3_pdf(bucket: str, key: str, max_wait_seconds: int = 300, poll_interval: float = 2.0) -> str:
     # Start asynchronous job (Textract requires S3 for PDF)
     start = textract.start_document_text_detection(DocumentLocation={"S3Object": {"Bucket": bucket, "Name": key}})
     job_id = start.get("JobId")

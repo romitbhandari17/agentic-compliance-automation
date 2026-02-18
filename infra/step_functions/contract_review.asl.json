@@ -75,7 +75,7 @@
         "ingestionResponse.$": "$.ingestionResult.Payload"
       },
       "ResultPath": "$.log",
-      "Next": "InvokeCompliance"
+      "Next": "RunComplianceAndRiskAnalysis"
     },
 
     "HandleIngestionError": {
@@ -88,68 +88,168 @@
       "Next": "FailWorkflow"
     },
 
-    "InvokeCompliance": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${compliance_lambda_arn}",
-        "Payload.$": "$.ingestionResult.Payload"
-      },
-      "TimeoutSeconds": 300,
-      "HeartbeatSeconds": 60,
-      "ResultPath": "$.complianceResult",
-      "Retry": [
+    "RunComplianceAndRiskAnalysis": {
+      "Type": "Parallel",
+      "InputPath": "$.ingestionResult.Payload",
+      "Branches": [
         {
-          "ErrorEquals": [
-            "Lambda.ServiceException",
-            "Lambda.AWSLambdaException",
-            "States.TaskFailed"
-          ],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2.0
+          "StartAt": "InvokeCompliance",
+          "States": {
+            "InvokeCompliance": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${compliance_lambda_arn}",
+                "Payload.$": "$"
+              },
+              "TimeoutSeconds": 300,
+              "HeartbeatSeconds": 60,
+              "ResultPath": "$.complianceResult",
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                },
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 1
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.complianceError",
+                  "Next": "HandleComplianceError"
+                }
+              ],
+              "Next": "CheckComplianceResult"
+            },
+            "CheckComplianceResult": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.complianceResult.Payload.model_output_raw",
+                  "IsPresent": true,
+                  "Next": "ComplianceDone"
+                },
+                {
+                  "Variable": "$.complianceResult.Payload.findings",
+                  "IsPresent": true,
+                  "Next": "ComplianceDone"
+                }
+              ],
+              "Default": "HandleComplianceError"
+            },
+            "HandleComplianceError": {
+              "Type": "Fail",
+              "Error": "COMPLIANCE_FAILED",
+              "Cause": "Compliance task failed"
+            },
+            "ComplianceDone": {
+              "Type": "Pass",
+              "Parameters": {
+                "status": "ok",
+                "findings.$": "$.complianceResult.Payload"
+              },
+              "End": true
+            }
+          }
         },
         {
-          "ErrorEquals": ["States.ALL"],
-          "IntervalSeconds": 5,
-          "MaxAttempts": 1
+          "StartAt": "InvokeRiskAnalysis",
+          "States": {
+            "InvokeRiskAnalysis": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${risk_analysis_lambda_arn}",
+                "Payload.$": "$"
+              },
+              "TimeoutSeconds": 300,
+              "HeartbeatSeconds": 60,
+              "ResultPath": "$.riskResult",
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                },
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 1
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.riskError",
+                  "Next": "HandleRiskError"
+                }
+              ],
+              "Next": "CheckRiskResult"
+            },
+            "CheckRiskResult": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.riskResult.Payload.findings",
+                  "IsPresent": true,
+                  "Next": "RiskDone"
+                },
+                {
+                  "Variable": "$.riskResult.Payload.status",
+                  "IsPresent": true,
+                  "Next": "RiskDone"
+                }
+              ],
+              "Default": "HandleRiskError"
+            },
+            "HandleRiskError": {
+              "Type": "Fail",
+              "Error": "RISK_ANALYSIS_FAILED",
+              "Cause": "Risk analysis task failed"
+            },
+            "RiskDone": {
+              "Type": "Pass",
+              "Parameters": {
+                "status": "ok",
+                "findings.$": "$.riskResult.Payload"
+              },
+              "End": true
+            }
+          }
         }
       ],
-      "Catch": [
-        {
-          "ErrorEquals": ["States.ALL"],
-          "ResultPath": "$.complianceError",
-          "Next": "HandleComplianceError"
-        }
-      ],
-      "Next": "CheckComplianceResult"
+      "ResultPath": "$.parallelResults",
+      "Next": "AssembleOutput"
     },
 
-    "CheckComplianceResult": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.complianceResult.Payload.model_output_raw",
-          "IsPresent": true,
-          "Next": "SuccessState"
-        },
-        {
-          "Variable": "$.complianceResult.Payload.findings",
-          "IsPresent": true,
-          "Next": "SuccessState"
-        }
-      ],
-      "Default": "HandleComplianceError"
-    },
-
-    "HandleComplianceError": {
+    "AssembleOutput": {
       "Type": "Pass",
       "Parameters": {
-        "status": "COMPLIANCE_FAILED",
-        "detail.$": "$.complianceError"
+        "contract_id.$": "$.ingestionResult.Payload.contract_id",
+        "s3.$": "$.ingestionResult.Payload.s3",
+        "s3_uri.$": "$.ingestionResult.Payload.s3_uri",
+        "compliance_findings.$": "$.parallelResults[0].findings",
+        "risk_findings.$": "$.parallelResults[1].findings",
+        "compliance_status.$": "$.parallelResults[0].status",
+        "risk_status.$": "$.parallelResults[1].status"
       },
-      "ResultPath": "$.errorInfo",
-      "Next": "FailWorkflow"
+      "ResultPath": "$.finalOutput",
+      "Next": "SuccessState"
     },
 
     "FailWorkflow": {
@@ -159,7 +259,8 @@
     },
 
     "SuccessState": {
-      "Type": "Succeed"
+      "Type": "Succeed",
+      "OutputPath": "$.finalOutput"
     }
   }
 }

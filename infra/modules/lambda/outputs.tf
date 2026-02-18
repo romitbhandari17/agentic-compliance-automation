@@ -29,3 +29,14 @@ output "invoke_sfn_lambda_name" {
   description = "Name of the invoke_sfn Lambda function"
   value       = aws_lambda_function.invoke_sfn.function_name
 }
+
+
+output "risk_analysis_lambda_arn" {
+  description = "ARN of the compliance Lambda function"
+  value       = aws_lambda_function.risk_analysis.arn
+}
+
+output "risk_analysis_lambda_name" {
+  description = "Name of the compliance Lambda function"
+  value       = aws_lambda_function.risk_analysis.function_name
+}

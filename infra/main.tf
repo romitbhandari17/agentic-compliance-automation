@@ -43,6 +43,7 @@ module "step_functions" {
   definition = templatefile("${path.module}/step_functions/contract_review.asl.json", {
     ingestion_lambda_arn  = module.lambda.ingestion_lambda_arn
     compliance_lambda_arn = module.lambda.compliance_lambda_arn
+    risk_analysis_lambda_arn = module.lambda.risk_analysis_lambda_arn
   })
 
 }

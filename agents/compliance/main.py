@@ -238,6 +238,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     result = {
         "contract_id": contract_id,
         "s3_uri": s3_uri,
+        "s3":s3_info,
         "findings": findings,
         "model_output_raw": model_output,
         "model_output_parsed": parsed,
