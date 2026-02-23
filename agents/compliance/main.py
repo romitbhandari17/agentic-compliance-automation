@@ -48,6 +48,35 @@ FINANCIAL_KEYWORDS = [
 GDPR_KEYWORDS = ["personal data", "data subject", "consent", "processing", "controller", "processor", "data protection"]
 
 
+def _extract_overall_compliance(model_text: str) -> Dict[str, Any]:
+    """Best-effort extraction of overall_compliance from non-JSON model output."""
+    if not isinstance(model_text, str) or not model_text.strip():
+        return {}
+
+    match = re.search(r"\"overall_compliance\"\s*:\s*\{[^}]*\}", model_text)
+    if not match:
+        return {}
+
+    snippet = "{" + match.group(0) + "}"
+    try:
+        parsed = json.loads(snippet)
+    except Exception:
+        return {}
+
+    overall = parsed.get("overall_compliance")
+    if not isinstance(overall, dict):
+        return {}
+
+    # Normalize expected keys if present
+    normalized: Dict[str, Any] = {}
+    if "status" in overall:
+        normalized["status"] = overall.get("status")
+    if "overall_compliance_score" in overall:
+        normalized["overall_compliance_score"] = overall.get("overall_compliance_score")
+
+    return normalized or overall
+
+
 def _log_and_print(msg: str) -> None:
     print(msg)
     logger.info(msg)
@@ -105,7 +134,13 @@ def _build_bedrock_prompt(contract_id: str, s3_uri: str, extracted_text: str, fi
         f"Also include the heuristic findings (PII counts, financial indicators, GDPR keyword hits).\n\n"
         f"Heuristic findings: {json.dumps(findings)}\n\n"
         f"Contract text (truncated={truncated}):\n{text_sample}\n\n"
-        f"Return JSON object with keys: summary, severity, recommendations, details. Keep the JSON parsable.\n"
+        f"overall_compliance_score: <number 0-10 derived from identified clause scores (0-10)>,\n"
+        f"Return JSON object with keys: summary, severity, recommendations, details, overall_compliance. Keep the JSON parsable.\n"
+        f"overall_compliance format:\n"
+        f"{{\n"
+        f"  \"compliance_status\": \"PARTIAL|PASS|FAIL\",\n"
+        f"  \"overall_compliance_score\": ,\n"
+        f"}}\n"
         f"In details, include an array named explainability with objects in this format:\n"
         f"{{\n"
         f"  \"clause\": \"Data Processing\",\n"
@@ -113,7 +148,7 @@ def _build_bedrock_prompt(contract_id: str, s3_uri: str, extracted_text: str, fi
         f"  \"compliance_status\": \"Passed|Failed|NeedsReview\",\n"
         f"  \"violated_requirement\": \"string\",\n"
         f"  \"reasoning\": \"string\",\n"
-        f"  \"confidence\": <0.0-1.0>\n"
+        f"  \"score\": <0-10>\n"
         f"}}\n"
     )
 
@@ -129,6 +164,7 @@ def call_bedrock_summary(prompt: str, model_id: str = None) -> str:
     instead of attempting to call Bedrock with an invalid default.
     """
     # Determine model id: prefer explicit argument, then env var
+    global output_text
     actual_model_id = model_id or BEDROCK_MODEL_ID or None
     _log_and_print(f"call_bedrock_summary: requested model_id={model_id} env_model={os.environ.get('BEDROCK_MODEL_ID')}")
 
@@ -178,21 +214,25 @@ def call_bedrock_summary(prompt: str, model_id: str = None) -> str:
         try:
             parsed = json.loads(model_text)
             # Try to extract common fields if present
-            if isinstance(parsed, dict):
-                outputs = parsed.get("outputs") or parsed.get("result")
-                if outputs and isinstance(outputs, list):
-                    first = outputs[0]
-                    content = first.get("content") if isinstance(first, dict) else None
-                    if isinstance(content, list):
-                        texts = [c.get("text") for c in content if isinstance(c, dict) and c.get("text")]
-                        if texts:
-                            model_text = "\n".join(texts)
+            output_text = ""
+            output_blocks = (
+                parsed.get("output", {})
+                .get("message", {})
+                .get("content", [])
+            )
+            if isinstance(output_blocks, list):
+                output_text = "".join(
+                    block.get("text", "")
+                    for block in output_blocks
+                    if isinstance(block, dict)
+                ).strip()
+
         except Exception:
             # not JSON or unexpected shape — keep raw model_text
             pass
 
-        _log_and_print("call_bedrock_summary: model invocation successful")
-        return model_text
+        print("model tex %s",output_text)
+        return output_text
 
     except Exception as e:
         # Improve the error message for invalid model identifiers
@@ -226,22 +266,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     prompt = _build_bedrock_prompt(contract_id, s3_uri, extracted_text, findings)
     model_output = call_bedrock_summary(prompt)
 
-    # Attempt to parse model output as JSON if possible; otherwise return raw text
-    parsed = None
-    try:
-        # Some models may return plain text that contains JSON; we'll try to extract a JSON object from the text
-        parsed = json.loads(model_output)
-        _log_and_print("handler: parsed model output as JSON")
-    except Exception:
-        _log_and_print("handler: model output not strict JSON; returning raw text in 'summary_text'")
+
+    overall_compliance = {}
+    overall_compliance = _extract_overall_compliance(model_output)
 
     result = {
         "contract_id": contract_id,
         "s3_uri": s3_uri,
         "s3":s3_info,
-        "findings": findings,
-        "model_output_raw": model_output,
-        "model_output_parsed": parsed,
+        # "findings": findings,
+        # "model_output_raw": model_output,
+        "model_response": model_output,
+        "compliance_findings": overall_compliance,
     }
 
     _log_and_print("handler: compliance processing complete")

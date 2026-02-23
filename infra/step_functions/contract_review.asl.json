@@ -135,12 +135,12 @@
               "Type": "Choice",
               "Choices": [
                 {
-                  "Variable": "$.complianceResult.Payload.model_output_raw",
+                  "Variable": "$.complianceResult.Payload.model_response",
                   "IsPresent": true,
                   "Next": "ComplianceDone"
                 },
                 {
-                  "Variable": "$.complianceResult.Payload.findings",
+                  "Variable": "$.complianceResult.Payload.status",
                   "IsPresent": true,
                   "Next": "ComplianceDone"
                 }
@@ -156,7 +156,7 @@
               "Type": "Pass",
               "Parameters": {
                 "status": "ok",
-                "findings.$": "$.complianceResult.Payload"
+                "step_output.$": "$.complianceResult.Payload"
               },
               "End": true
             }
@@ -205,7 +205,7 @@
               "Type": "Choice",
               "Choices": [
                 {
-                  "Variable": "$.riskResult.Payload.findings",
+                  "Variable": "$.riskResult.Payload.model_response",
                   "IsPresent": true,
                   "Next": "RiskDone"
                 },
@@ -226,7 +226,7 @@
               "Type": "Pass",
               "Parameters": {
                 "status": "ok",
-                "findings.$": "$.riskResult.Payload"
+                "step_output.$": "$.riskResult.Payload"
               },
               "End": true
             }
@@ -234,6 +234,49 @@
         }
       ],
       "ResultPath": "$.parallelResults",
+      "Next": "InvokeDecision"
+    },
+
+    "InvokeDecision": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${decision_lambda_arn}",
+        "Payload": {
+          "contract_id.$": "$.ingestionResult.Payload.contract_id",
+          "s3.$": "$.ingestionResult.Payload.s3",
+          "s3_uri.$": "$.ingestionResult.Payload.s3_uri",
+          "compliance_findings.$": "$.parallelResults[0].step_output.compliance_findings",
+          "risk_analysis_findings.$": "$.parallelResults[1].step_output.risk_analysis_findings"
+        }
+      },
+      "TimeoutSeconds": 300,
+      "HeartbeatSeconds": 60,
+      "ResultPath": "$.decisionResult",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 1
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.decisionError",
+          "Next": "FailWorkflow"
+        }
+      ],
       "Next": "AssembleOutput"
     },
 
@@ -243,10 +286,9 @@
         "contract_id.$": "$.ingestionResult.Payload.contract_id",
         "s3.$": "$.ingestionResult.Payload.s3",
         "s3_uri.$": "$.ingestionResult.Payload.s3_uri",
-        "compliance_findings.$": "$.parallelResults[0].findings",
-        "risk_findings.$": "$.parallelResults[1].findings",
-        "compliance_status.$": "$.parallelResults[0].status",
-        "risk_status.$": "$.parallelResults[1].status"
+        "compliance_findings.$": "$.parallelResults[0].step_output.compliance_findings",
+        "risk_findings.$": "$.parallelResults[1].step_output.risk_analysis_findings",
+        "decision.$": "$.decisionResult.Payload"
       },
       "ResultPath": "$.finalOutput",
       "Next": "SuccessState"

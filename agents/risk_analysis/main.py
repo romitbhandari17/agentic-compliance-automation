@@ -29,7 +29,7 @@ def _make_prompt(extracted_text: str, contract_id: Optional[str]) -> str:
         "  \"risk_breakdown\": { \"liability\": <0-10>, \"indemnification\": <0-10>, \"data_protection\": <0-10>, \"termination\": <0-10> },\n"
         "  \"overall_risk_score\": <number 0-10>,\n"
         "  \"risk_level\": \"Low|Medium|High\",\n"
-        "  \"confidence_score\": <0.0-1.0>,\n"
+        "  \"overall_confidence\": <0.0-1.0>,\n"
         "  \"top_risks\": [\"string\", ...],\n"
         "  \"clauses\": [\n"
         "    {\n"
@@ -41,6 +41,8 @@ def _make_prompt(extracted_text: str, contract_id: Optional[str]) -> str:
         "    }\n"
         "  ]\n"
         "}\n"
+        "overall_risk_score: <number 0-10 derived from identified clause risk scores (0-10)>,\n"
+        "overall_confidence: <number 0-1 derived from identified clause confidence scores (0-10)>,\n"
         "Only output valid JSON (no extra commentary). Make numeric scores integers 0-10 for risk_breakdown and overall_risk_score can be decimal. "
         "Confidence must be between 0 and 1. Top risks should be a short list (strings). For each identified clause, include a risk_score, 2-3 sentence reasoning, and the exact clause_text used.\n\n"
         f"Contract ID: {contract_id}\n"
@@ -49,11 +51,12 @@ def _make_prompt(extracted_text: str, contract_id: Optional[str]) -> str:
     )
 
 
-def _invoke_bedrock(prompt: str, model_id: str = None) -> Dict[str, Any]:
+def _invoke_bedrock(prompt: str, model_id: str = None) -> str:
     """Invoke Bedrock (bedrock-runtime) using the same pattern as the compliance lambda.
 
     Returns a dict containing raw output (string) on success or an error object on failure.
     """
+    global output_text, parsed
     actual_model_id = model_id or BEDROCK_MODEL_ID or None
     logger.info("_invoke_bedrock: requested model_id=%s env_model=%s", model_id, os.environ.get("BEDROCK_MODEL_ID"))
 
@@ -98,67 +101,39 @@ def _invoke_bedrock(prompt: str, model_id: str = None) -> Dict[str, Any]:
 
         model_text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
 
-        # Try to extract common fields if present (some Bedrock responses include outputs->content->text)
+        # Some Bedrock responses return a JSON object with `outputs` -> content -> text
         try:
             parsed = json.loads(model_text)
-            if isinstance(parsed, dict):
-                outputs = parsed.get("outputs") or parsed.get("result")
-                if outputs and isinstance(outputs, list):
-                    first = outputs[0]
-                    content = first.get("content") if isinstance(first, dict) else None
-                    if isinstance(content, list):
-                        texts = [c.get("text") for c in content if isinstance(c, dict) and c.get("text")]
-                        if texts:
-                            model_text = "\n".join(texts)
+            # Try to extract common fields if present
+            output_text = ""
+            output_blocks = (
+                parsed.get("output", {})
+                .get("message", {})
+                .get("content", [])
+            )
+            if isinstance(output_blocks, list):
+                output_text = "".join(
+                    block.get("text", "")
+                    for block in output_blocks
+                    if isinstance(block, dict)
+                ).strip()
         except Exception:
             # not JSON or unexpected shape — keep raw model_text
             pass
 
         logger.info("_invoke_bedrock: model invocation successful")
-        return {"success": True, "raw": model_text}
+        return output_text
 
     except Exception as e:
         err_msg = str(e)
         suggestion = "Ensure BEDROCK_MODEL_ID is a valid Bedrock model identifier or ARN and that your IAM principal has Bedrock access."
         logger.exception("_invoke_bedrock: bedrock invocation failed: %s", err_msg)
-        return {"success": False, "raw": json.dumps({
+        return json.dumps({
             "summary": "Bedrock invocation failed",
             "error": err_msg,
             "suggestion": suggestion,
             "model_id_used": actual_model_id,
-        })}
-
-
-def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
-    """Try to find the first JSON object in the text and parse it."""
-    if not text:
-        return None
-    # Direct parse attempt
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-
-    # Fallback: find the largest { ... } substring
-    # This is a best-effort heuristic
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        candidate = text[start:end + 1]
-        try:
-            return json.loads(candidate)
-        except Exception:
-            pass
-
-    # Try regex-based extraction of JSON-like portions (simpler pattern)
-    matches = re.findall(r"\{[^}]*\}", text, flags=re.DOTALL)
-    for m in matches:
-        try:
-            return json.loads(m)
-        except Exception:
-            continue
-
-    return None
+        })
 
 
 def _compute_heuristic_from_text(text: str) -> Dict[str, Any]:
@@ -234,33 +209,32 @@ def handler(event: Dict[str, Any], context=None) -> Dict[str, Any]:
     # Call Bedrock
     bedrock_result = _invoke_bedrock(prompt)
 
-    model_output_raw = bedrock_result.get("raw")
-    model_output_parsed = None
-    analysis = None
-
-    if bedrock_result.get("success") and model_output_raw:
-        # Try to parse model output as JSON
-        parsed = _extract_json_from_text(model_output_raw)
-        model_output_parsed = parsed
-        if parsed:
-            # Basic validation: ensure keys exist
-            keys_ok = all(k in parsed for k in ("risk_breakdown", "overall_risk_score", "risk_level", "confidence_score", "top_risks"))
-            if keys_ok:
-                analysis = parsed
-            else:
-                logger.warning("Bedrock returned JSON but missing expected keys for contract %s", contract_id)
-
-    if analysis is None:
-        # Either Bedrock failed or didn't return valid JSON — fallback heuristic
-        heuristic = _compute_heuristic_from_text(extracted_text)
-        analysis = heuristic
+    overall_risk = _extract_overall_numbers(bedrock_result)
 
     # Return a rich response including raw model output for debugging
     return {
         "contract_id": contract_id,
         "s3": event.get("s3"),
         "s3_uri": event.get("s3_uri"),
-        "model_output_raw": model_output_raw,
-        "findings": analysis,
-        "model_output_parsed": model_output_parsed,
+        "model_response": bedrock_result,
+        "risk_analysis_findings": {
+            "overall_risk_score": overall_risk.get("overall_risk_score"),
+            "overall_confidence": overall_risk.get("overall_confidence"),
+        }
     }
+
+def _extract_overall_numbers(text: str) -> Dict[str, Any]:
+    print("Entering _extract_overall_numbers")
+    if not isinstance(text, str) or not text.strip():
+        return {}
+
+    extracted: Dict[str, Any] = {}
+    risk_match = re.search(r"\"overall_risk_score\"\s*:\s*([0-9]+(?:\.[0-9]+)?)", text)
+    conf_match = re.search(r"\"overall_confidence\"\s*:\s*([0-9]+(?:\.[0-9]+)?)", text)
+
+    if risk_match:
+        extracted["overall_risk_score"] = float(risk_match.group(1))
+    if conf_match:
+        extracted["overall_confidence"] = float(conf_match.group(1))
+
+    return extracted

@@ -38,3 +38,9 @@ variable "risk_analysis_zip_path" {
   type        = string
   default     = ""
 }
+
+variable "decision_zip_path" {
+  description = "Path to decision lambda zip package"
+  type        = string
+  default     = ""
+}

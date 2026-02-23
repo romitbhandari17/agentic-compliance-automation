@@ -183,6 +183,56 @@ resource "aws_iam_role_policy" "risk_analysis_lambda_inline" {
   policy = data.aws_iam_policy_document.risk_analysis_lambda_policy.json
 }
 
+// Decision Lambda policy and role (mirrors compliance/risk)
+// - S3: Get/Put/List
+// - CloudWatch Logs: Create/Put/Get
+// - Bedrock: model invocation-related actions
+data "aws_iam_policy_document" "decision_lambda_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogStreams",
+      "logs:GetLogEvents"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+      "bedrock:DescribeModel"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role" "decision_lambda_role" {
+  name               = "decision-lambda-execution-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+resource "aws_iam_role_policy" "decision_lambda_inline" {
+  name   = "decision-lambda-inline-policy"
+  role   = aws_iam_role.decision_lambda_role.id
+  policy = data.aws_iam_policy_document.decision_lambda_policy.json
+}
+
 // Assume role policy for Step Functions service principal
 data "aws_iam_policy_document" "step_functions_assume_role" {
   statement {

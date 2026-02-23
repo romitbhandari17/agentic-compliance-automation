@@ -18,16 +18,19 @@ module "lambda" {
   compliance_filename       = var.compliance_zip_path
   invoke_filename          = var.invoke_zip_path
   risk_analysis_filename   = var.risk_analysis_zip_path
+  decision_filename        = var.decision_zip_path
 
   ingestion_function_name   = "${var.project}-${var.env}-ingestion-lambda"
   compliance_function_name  = "${var.project}-${var.env}-compliance-lambda"
   invoke_function_name      = "${var.project}-${var.env}-invoke-sfn-lambda"
   risk_analysis_function_name = "${var.project}-${var.env}-risk-analysis-lambda"
+  decision_function_name    = "${var.project}-${var.env}-decision-lambda"
 
   ingestion_role_arn        = module.iam.ingestion_lambda_role_arn
   compliance_role_arn       = module.iam.compliance_lambda_role_arn
   invoke_role_arn           = module.iam.invoke_sfn_lambda_role_arn
   risk_analysis_role_arn    = module.iam.risk_analysis_lambda_role_arn
+  decision_role_arn         = module.iam.decision_lambda_role_arn
 }
 
 // Module: Step Functions (orchestrates invocation of lambdas)
@@ -44,6 +47,7 @@ module "step_functions" {
     ingestion_lambda_arn  = module.lambda.ingestion_lambda_arn
     compliance_lambda_arn = module.lambda.compliance_lambda_arn
     risk_analysis_lambda_arn = module.lambda.risk_analysis_lambda_arn
+    decision_lambda_arn = module.lambda.decision_lambda_arn
   })
 
 }

@@ -116,3 +116,27 @@ variable "risk_analysis_timeout" {
   type        = number
   default     = 300
 }
+
+variable "decision_filename" {
+  description = "path for decision lambda deployment package"
+  type        = string
+  default     = ""
+}
+
+variable "decision_function_name" {
+  description = "Name for the decision Lambda function"
+  type        = string
+  default     = "decision-lambda"
+}
+
+variable "decision_role_arn" {
+  description = "IAM role ARN to attach to the decision Lambda"
+  type        = string
+  default     = ""
+}
+
+variable "decision_timeout" {
+  description = "Timeout for the decision Lambda function in seconds"
+  type        = number
+  default     = 300
+}

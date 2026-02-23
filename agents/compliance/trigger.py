@@ -3,7 +3,7 @@ Local trigger for the compliance lambda handler.
 
 Usage: run this file from the repository root with Python 3.x:
 
-    python3 agents/compliance/trigger.py
+    python3 agents/compliance/triggerDecision.py
 
 This will call `handler(event, None)` and print the returned payload or any exception.
 

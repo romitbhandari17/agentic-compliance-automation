@@ -48,3 +48,13 @@ output "risk_analysis_lambda_role_name" {
   description = "Name of the risk analysis Lambda execution role"
   value       = aws_iam_role.risk_analysis_lambda_role.name
 }
+
+output "decision_lambda_role_arn" {
+  description = "ARN of the decision Lambda execution role"
+  value       = aws_iam_role.decision_lambda_role.arn
+}
+
+output "decision_lambda_role_name" {
+  description = "Name of the decision Lambda execution role"
+  value       = aws_iam_role.decision_lambda_role.name
+}

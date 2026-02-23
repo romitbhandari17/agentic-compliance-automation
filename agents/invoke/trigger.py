@@ -4,7 +4,7 @@ Local trigger for the invoke_sfn lambda handler.
 Builds a sample S3 Put event and calls handler(event, None).
 
 Usage:
-  python3 agents/invoke/trigger.py --bucket my-bucket --key contracts/contract.pdf
+  python3 agents/invoke/triggerDecision.py --bucket my-bucket --key contracts/contract.pdf
 
 This script will not package or deploy the lambda; it only calls the local handler function.
 """

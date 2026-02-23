@@ -22,6 +22,10 @@ variable "risk_analysis_zip_path" {
   default = ""
 }
 
+variable "decision_zip_path" {
+  default = ""
+}
+
 module "root" {
   source = "../../"
 
@@ -33,4 +37,5 @@ module "root" {
   compliance_zip_path       = var.compliance_zip_path
   invoke_zip_path = var.invoke_zip_path
   risk_analysis_zip_path = var.risk_analysis_zip_path
+  decision_zip_path = var.decision_zip_path
 }

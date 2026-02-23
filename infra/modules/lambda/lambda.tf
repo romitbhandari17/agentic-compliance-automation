@@ -55,3 +55,15 @@ resource "aws_lambda_function" "risk_analysis" {
   role          = var.risk_analysis_role_arn
   timeout       = var.risk_analysis_timeout
 }
+
+resource "aws_lambda_function" "decision" {
+  function_name = var.decision_function_name
+
+  filename         = length(var.decision_filename) > 0 ? var.decision_filename : null
+  source_code_hash = length(var.decision_filename) > 0 ? filebase64sha256(var.decision_filename) : null
+
+  handler       = "agents.decision.main.handler"
+  runtime       = "python3.10"
+  role          = var.decision_role_arn
+  timeout       = var.decision_timeout
+}
