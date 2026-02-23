@@ -1,0 +1,21 @@
+{
+  "acme": {
+    "risk_score_threshold": 7,
+    "compliance_score_threshold": 6,
+    "confidence_threshold": 0.7,
+    "notes": "POC tenant config"
+  },
+  "globex": {
+    "risk_score_threshold": 6,
+    "compliance_score_threshold": 7,
+    "confidence_threshold": 0.7,
+    "notes": "POC tenant config"
+  },
+  "default": {
+    "risk_score_threshold": 7,
+    "compliance_score_threshold": 6,
+    "confidence_threshold": 0.7,
+    "notes": "Default POC config"
+  }
+}
+
