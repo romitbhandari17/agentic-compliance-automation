@@ -3,7 +3,7 @@ project = "agentic-compliance-automation"
 region = "us-east-1"
 
 ingestion_zip_path = "../../../agents/ingestion/ingestion.zip"
-compliance_zip_path = "../../../agents/compliance/compliance.zip"
+compliance_zip_path = "../../../agents.zip"
 invoke_zip_path = "../../../agents/invoke/invoke.zip"
 risk_analysis_zip_path = "../../../agents/risk_analysis/risk_analysis.zip"
 decision_zip_path = "../../../agents.zip"

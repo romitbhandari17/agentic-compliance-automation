@@ -28,7 +28,7 @@ resource "aws_lambda_function" "compliance" {
   # s3_bucket = length(var.compliance_s3_key) > 0 ? var.s3_bucket : null
   # s3_key    = length(var.compliance_s3_key) > 0 ? var.compliance_s3_key : null
 
-  handler       = "main.handler"
+  handler       = "agents.compliance.main.handler"
   runtime       = "python3.10"
   role          = var.compliance_role_arn
   timeout       = var.compliance_timeout

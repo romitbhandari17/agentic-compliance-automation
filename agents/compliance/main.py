@@ -22,6 +22,11 @@ import logging
 import re
 import boto3
 from typing import Dict, Any
+import sys
+
+# Add shared/ to path for tenant helpers
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "shared")))
+from agents.shared.tenant_context import extract_tenant_id_from_s3_key, load_tenant_config
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -69,15 +74,20 @@ def _extract_overall_compliance(model_text: str) -> Dict[str, Any]:
 
     # Normalize expected keys if present
     normalized: Dict[str, Any] = {}
-    if "status" in overall:
-        normalized["status"] = overall.get("status")
+    if "compliance_status" in overall:
+        normalized["compliance_status"] = overall.get("compliance_status")
     if "overall_compliance_score" in overall:
         normalized["overall_compliance_score"] = overall.get("overall_compliance_score")
 
     return normalized or overall
 
 
-def _log_and_print(msg: str) -> None:
+def _log_and_print(msg: str, *args: Any) -> None:
+    if args:
+        try:
+            msg = msg % args
+        except Exception:
+            msg = f"{msg} {' '.join(str(a) for a in args)}"
     print(msg)
     logger.info(msg)
 
@@ -113,7 +123,14 @@ def analyze_text_rules(extracted_text: str) -> Dict[str, Any]:
     return findings
 
 
-def _build_bedrock_prompt(contract_id: str, s3_uri: str, extracted_text: str, findings: Dict[str, Any]) -> str:
+def _build_bedrock_prompt(
+    contract_id: str,
+    s3_uri: str,
+    extracted_text: str,
+    findings: Dict[str, Any],
+    region: str,
+    industry: str,
+) -> str:
     _log_and_print("_build_bedrock_prompt: building prompt for bedrock model")
 
     # Truncate extracted_text to a reasonable size for model input if necessary
@@ -127,6 +144,9 @@ def _build_bedrock_prompt(contract_id: str, s3_uri: str, extracted_text: str, fi
 
     prompt = (
         f"You are a compliance assistant.\n"
+        f"As compliance checks differ based on region and industry, " "Do the checks based on the extracted region and industry \n"
+        "like following:" "Data Privacy: GPDR for EU, CCPA for US, HIPAA for healthcare etc.\n" 
+        "Security: SOC2, ISO, etc. " f"Consider Region: {region or 'unknown'}\n" f"Consider Industry: {industry or 'unknown'}\n"
         f"Contract ID: {contract_id}\n"
         f"S3 URI: {s3_uri}\n"
         f"Perform GDPR and SOX related compliance checks on the following extracted contract text.\n"
@@ -152,7 +172,7 @@ def _build_bedrock_prompt(contract_id: str, s3_uri: str, extracted_text: str, fi
         f"}}\n"
     )
 
-    _log_and_print("_build_bedrock_prompt: prompt built")
+    _log_and_print("_build_bedrock_prompt: prompt built successfully %s", prompt)
     return prompt
 
 
@@ -257,15 +277,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     s3_uri = event.get("s3_uri") or f"s3://{s3_info.get('bucket', '')}/{s3_info.get('key', '')}"
     extracted_text = event.get("extracted_text") or ""
 
+    tenant_id = extract_tenant_id_from_s3_key(s3_info.get("key"))
+    tenant_cfg = load_tenant_config(tenant_id)
+    region = tenant_cfg.get("region") if isinstance(tenant_cfg, dict) else None
+    industry = tenant_cfg.get("industry") if isinstance(tenant_cfg, dict) else None
+
     _log_and_print(f"handler: contract_id={contract_id}, s3_uri={s3_uri}")
+    _log_and_print(f"handler: tenant_id={tenant_id}, region={region}, industry={industry}")
 
     # Run heuristic analysis
     findings = analyze_text_rules(extracted_text)
 
     # Build prompt and call Bedrock for a human-friendly summary
-    prompt = _build_bedrock_prompt(contract_id, s3_uri, extracted_text, findings)
+    prompt = _build_bedrock_prompt(contract_id, s3_uri, extracted_text, findings, region, industry)
     model_output = call_bedrock_summary(prompt)
-
 
     overall_compliance = {}
     overall_compliance = _extract_overall_compliance(model_output)
