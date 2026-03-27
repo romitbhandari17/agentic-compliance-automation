@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+boto3
+sentence-transformers
+annoy
+numpy
+python-multipart
+pydantic
+requests
+PyPDF2
